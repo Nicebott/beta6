@@ -6,7 +6,6 @@ import Pagination from './components/Pagination';
 import Chat from './components/Chat';
 import LoadingSpinner from './components/LoadingSpinner';
 import AuthModal from './components/AuthModal';
-import ReviewModal from './components/ReviewModal';
 import ProfileDropdown from './components/ProfileDropdown';
 import { Course, Section } from './types';
 import { fetchCourseData } from './api/courseData';
@@ -50,8 +49,6 @@ function App() {
     return savedMode ? JSON.parse(savedMode) : false;
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [selectedProfessor, setSelectedProfessor] = useState<{ id: string; name: string } | null>(null);
   const [user, setUser] = useState(auth.currentUser);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
@@ -134,19 +131,6 @@ function App() {
     const uniqueCourseIds = new Set(currentSections.map(section => section.courseId));
     return allCourses.filter(course => uniqueCourseIds.has(course.id));
   }, [currentSections, allCourses]);
-
-  const handleRateSection = useCallback((sectionId: string) => {
-    if (!user) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-
-    const section = allSections.find(s => s.id === sectionId);
-    if (section) {
-      setSelectedProfessor({ id: section.professor, name: section.professor });
-      setIsReviewModalOpen(true);
-    }
-  }, [user, allSections]);
 
   const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
@@ -297,7 +281,11 @@ function App() {
               <CourseTable
                 courses={currentCourses}
                 sections={currentSections}
-                onRateSection={handleRateSection}
+                onRateSection={() => {
+                  if (!user) {
+                    setIsAuthModalOpen(true);
+                  }
+                }}
                 darkMode={darkMode}
               />
               <Pagination
@@ -336,20 +324,6 @@ function App() {
         onClose={() => setIsAuthModalOpen(false)}
         darkMode={darkMode}
       />
-      
-      {selectedProfessor && (
-        <ReviewModal
-          isOpen={isReviewModalOpen}
-          onClose={() => {
-            setIsReviewModalOpen(false);
-            setSelectedProfessor(null);
-          }}
-          darkMode={darkMode}
-          professorId={selectedProfessor.id}
-          professorName={selectedProfessor.name}
-          userId={user?.uid || ''}
-        />
-      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Star } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { firestore } from '../firebase';
+import { X, Star, Send } from 'lucide-react';
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { firestore, auth } from '../firebase';
+import toast from 'react-hot-toast';
 
 interface Review {
   rating: number;
@@ -28,36 +29,69 @@ const ProfessorDetailsModal: React.FC<ProfessorDetailsModalProps> = ({
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [averageRating, setAverageRating] = useState(0);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchReviews = async () => {
+    setLoading(true);
+    try {
+      const reviewsQuery = query(
+        collection(firestore, 'reviews'),
+        where('professorId', '==', professorId)
+      );
+      
+      const querySnapshot = await getDocs(reviewsQuery);
+      const reviewsData = querySnapshot.docs.map(doc => doc.data() as Review);
+      
+      setReviews(reviewsData);
+      
+      if (reviewsData.length > 0) {
+        const average = reviewsData.reduce((acc, review) => acc + review.rating, 0) / reviewsData.length;
+        setAverageRating(Number(average.toFixed(1)));
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchReviews = async () => {
-      if (!isOpen) return;
-      
-      setLoading(true);
-      try {
-        const reviewsQuery = query(
-          collection(firestore, 'reviews'),
-          where('professorId', '==', professorId)
-        );
-        
-        const querySnapshot = await getDocs(reviewsQuery);
-        const reviewsData = querySnapshot.docs.map(doc => doc.data() as Review);
-        
-        setReviews(reviewsData);
-        
-        if (reviewsData.length > 0) {
-          const average = reviewsData.reduce((acc, review) => acc + review.rating, 0) / reviewsData.length;
-          setAverageRating(Number(average.toFixed(1)));
-        }
-      } catch (error) {
-        console.error('Error fetching reviews:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReviews();
+    if (isOpen) {
+      fetchReviews();
+    }
   }, [isOpen, professorId]);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth.currentUser) {
+      toast.error('Debes iniciar sesión para dejar una reseña');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const reviewsCollection = collection(firestore, 'reviews');
+      await addDoc(reviewsCollection, {
+        professorId,
+        userId: auth.currentUser.uid,
+        userName: auth.currentUser.displayName || 'Usuario Anónimo',
+        rating: newRating,
+        comment: newComment,
+        timestamp: new Date().toISOString()
+      });
+      toast.success('¡Reseña enviada exitosamente!');
+      setNewComment('');
+      setNewRating(5);
+      fetchReviews();
+    } catch (error) {
+      console.error('Error al enviar la reseña:', error);
+      toast.error('Error al enviar la reseña');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -107,6 +141,58 @@ const ProfessorDetailsModal: React.FC<ProfessorDetailsModalProps> = ({
             </span>
           </div>
         </div>
+
+        {auth.currentUser && (
+          <form onSubmit={handleSubmitReview} className="mb-6">
+            <div className="flex items-center mb-2">
+              <select
+                value={newRating}
+                onChange={(e) => setNewRating(Number(e.target.value))}
+                className={`mr-2 rounded-md px-2 py-1 ${
+                  darkMode
+                    ? 'bg-gray-700 text-white border-gray-600'
+                    : 'bg-white text-gray-900 border-gray-300'
+                }`}
+              >
+                {[5, 4, 3, 2, 1].map((value) => (
+                  <option key={value} value={value}>
+                    {value} {value === 1 ? 'estrella' : 'estrellas'}
+                  </option>
+                ))}
+              </select>
+              <div className="flex-grow relative">
+                <input
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Escribe tu reseña..."
+                  className={`w-full rounded-md px-3 py-2 pr-12 ${
+                    darkMode
+                      ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-400'
+                      : 'bg-white text-gray-900 border-gray-300 placeholder-gray-500'
+                  }`}
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                >
+                  <Send
+                    size={20}
+                    className={`${
+                      submitting
+                        ? 'text-gray-400'
+                        : darkMode
+                          ? 'text-blue-400 hover:text-blue-300'
+                          : 'text-blue-500 hover:text-blue-600'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
 
         {loading ? (
           <div className={`text-center py-8 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>

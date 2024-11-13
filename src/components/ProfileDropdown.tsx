@@ -22,7 +22,7 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ darkMode, onClose }) 
 
   return (
     <div
-      className={`absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 ${
+      className={`absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 z-50 ${
         darkMode ? 'bg-gray-800' : 'bg-white'
       } ring-1 ring-black ring-opacity-5`}
     >
