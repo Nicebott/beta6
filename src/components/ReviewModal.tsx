@@ -23,6 +23,10 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
   userId
 }) => {
   const [rating, setRating] = useState(5);
+  const [clarity, setClarity] = useState(5);
+  const [fairness, setFairness] = useState(5);
+  const [punctuality, setPunctuality] = useState(5);
+  const [wouldTakeAgain, setWouldTakeAgain] = useState(5);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -39,6 +43,10 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
         userId,
         userName: auth.currentUser?.displayName || 'Usuario Anónimo',
         rating,
+        clarity,
+        fairness,
+        punctuality,
+        wouldTakeAgain,
         comment,
         timestamp: new Date().toISOString()
       });
@@ -51,6 +59,29 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
       setLoading(false);
     }
   };
+
+  const RatingSelect = ({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) => (
+    <div>
+      <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={`block w-full rounded-md shadow-sm ${
+          darkMode
+            ? 'bg-gray-700 border-gray-600 text-white'
+            : 'bg-white border-gray-300 text-gray-900'
+        } focus:ring-blue-500 focus:border-blue-500`}
+      >
+        {[5, 4, 3, 2, 1].map((value) => (
+          <option key={value} value={value}>
+            {value} {value === 1 ? 'estrella' : 'estrellas'}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -67,25 +98,12 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
         </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-              Calificación
-            </label>
-            <select
-              value={rating}
-              onChange={(e) => setRating(Number(e.target.value))}
-              className={`mt-1 block w-full rounded-md shadow-sm ${
-                darkMode
-                  ? 'bg-gray-700 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
-              } focus:ring-blue-500 focus:border-blue-500`}
-            >
-              {[5, 4, 3, 2, 1].map((value) => (
-                <option key={value} value={value}>
-                  {value} {value === 1 ? 'estrella' : 'estrellas'}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <RatingSelect label="Calificación General" value={rating} onChange={setRating} />
+            <RatingSelect label="Claridad" value={clarity} onChange={setClarity} />
+            <RatingSelect label="Justicia" value={fairness} onChange={setFairness} />
+            <RatingSelect label="Puntualidad" value={punctuality} onChange={setPunctuality} />
+            <RatingSelect label="¿Lo tomarías de nuevo?" value={wouldTakeAgain} onChange={setWouldTakeAgain} />
           </div>
           
           <div>

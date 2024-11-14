@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Course, Section } from '../types';
-import { Search } from 'lucide-react';
+import { Search, Star } from 'lucide-react';
 import ProfessorDetailsModal from './ProfessorDetailsModal';
+import ReviewModal from './ReviewModal';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { firestore } from '../firebase';
+import { firestore, auth } from '../firebase';
+import toast from 'react-hot-toast';
 
 interface ProfessorRating {
-  [key: string]: number;
+  [key: string]: {
+    rating: number;
+    clarity: number;
+    fairness: number;
+    punctuality: number;
+    wouldTakeAgain: number;
+  };
 }
 
 interface CourseTableProps {
@@ -19,6 +27,8 @@ interface CourseTableProps {
 const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSection, darkMode }) => {
   const [selectedProfessor, setSelectedProfessor] = useState<{ id: string; name: string } | null>(null);
   const [professorRatings, setProfessorRatings] = useState<ProfessorRating>({});
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedSection, setSelectedSection] = useState<string>('');
 
   useEffect(() => {
     const fetchProfessorRatings = async () => {
@@ -36,8 +46,28 @@ const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSect
           const reviews = querySnapshot.docs.map(doc => doc.data());
           
           if (reviews.length > 0) {
-            const average = reviews.reduce((acc: number, review: any) => acc + review.rating, 0) / reviews.length;
-            ratings[professor] = Number(average.toFixed(1));
+            const totals = reviews.reduce((acc, review: any) => ({
+              rating: acc.rating + review.rating,
+              clarity: acc.clarity + (review.clarity || 0),
+              fairness: acc.fairness + (review.fairness || 0),
+              punctuality: acc.punctuality + (review.punctuality || 0),
+              wouldTakeAgain: acc.wouldTakeAgain + (review.wouldTakeAgain || 0)
+            }), {
+              rating: 0,
+              clarity: 0,
+              fairness: 0,
+              punctuality: 0,
+              wouldTakeAgain: 0
+            });
+
+            const count = reviews.length;
+            ratings[professor] = {
+              rating: Number((totals.rating / count).toFixed(1)),
+              clarity: Number((totals.clarity / count).toFixed(1)),
+              fairness: Number((totals.fairness / count).toFixed(1)),
+              punctuality: Number((totals.punctuality / count).toFixed(1)),
+              wouldTakeAgain: Number((totals.wouldTakeAgain / count).toFixed(1))
+            };
           }
         } catch (error) {
           console.error('Error fetching ratings for professor:', professor, error);
@@ -50,29 +80,50 @@ const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSect
     fetchProfessorRatings();
   }, [sections]);
 
+  const handleRateClick = (sectionId: string, professorId: string) => {
+    if (!auth.currentUser) {
+      onRateSection(sectionId);
+      return;
+    }
+    setSelectedSection(sectionId);
+    setSelectedProfessor({ id: professorId, name: professorId });
+    setShowReviewModal(true);
+  };
+
   const getRatingBadgeColor = (rating: number) => {
     if (rating >= 4) return 'bg-green-500';
     if (rating >= 3) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
-  const RatingButton = ({ rating, onClick }: { rating: number | null; onClick: () => void }) => (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1 rounded flex items-center space-x-1 ${
-        rating
-          ? getRatingBadgeColor(rating)
-          : darkMode
-            ? 'bg-gray-700'
-            : 'bg-gray-200'
-      } hover:opacity-90 transition-opacity`}
-    >
-      <Search size={14} className="text-white" />
-      <span className="text-white font-medium">
-        {rating ? `${rating.toFixed(1)}/10` : 'Sin calificación'}
-      </span>
-    </button>
-  );
+  const RatingButton = ({ professor, onClick }: { professor: string; onClick: () => void }) => {
+    const ratings = professorRatings[professor];
+    if (!ratings) {
+      return (
+        <button
+          onClick={onClick}
+          className={`px-3 py-1 rounded flex items-center space-x-1 ${
+            darkMode ? 'bg-gray-700' : 'bg-gray-200'
+          } hover:opacity-90 transition-opacity`}
+        >
+          <Search size={14} className="text-white" />
+          <span className="text-white font-medium">Sin calificación</span>
+        </button>
+      );
+    }
+
+    return (
+      <button
+        onClick={onClick}
+        className={`px-3 py-1 rounded flex items-center space-x-1 ${getRatingBadgeColor(ratings.rating)} hover:opacity-90 transition-opacity`}
+      >
+        <Search size={14} className="text-white" />
+        <span className="text-white font-medium">
+          {ratings.rating.toFixed(1)}/5
+        </span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -92,9 +143,6 @@ const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSect
             {sections.map((section) => {
               const course = courses.find(c => c.id === section.courseId);
               if (!course) return null;
-
-              const professorRating = professorRatings[section.professor];
-              const normalizedRating = professorRating ? (professorRating * 2) : null; // Convert 5-star to 10-point scale
 
               return (
                 <tr 
@@ -129,11 +177,6 @@ const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSect
                         >
                           <Search size={16} />
                         </button>
-                        {professorRating && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium text-white ${getRatingBadgeColor(professorRating)}`}>
-                            {professorRating}/5
-                          </span>
-                        )}
                       </div>
                     </div>
                   </td>
@@ -146,14 +189,8 @@ const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSect
                   <td className="py-3 px-2 sm:px-4">
                     <div className="flex justify-center">
                       <RatingButton
-                        rating={normalizedRating}
-                        onClick={() => {
-                          setSelectedProfessor({
-                            id: section.professor,
-                            name: section.professor
-                          });
-                          onRateSection(section.id);
-                        }}
+                        professor={section.professor}
+                        onClick={() => handleRateClick(section.id, section.professor)}
                       />
                     </div>
                   </td>
@@ -164,13 +201,27 @@ const CourseTable: React.FC<CourseTableProps> = ({ courses, sections, onRateSect
         </table>
       </div>
 
-      {selectedProfessor && (
+      {selectedProfessor && !showReviewModal && (
         <ProfessorDetailsModal
           isOpen={!!selectedProfessor}
           onClose={() => setSelectedProfessor(null)}
           darkMode={darkMode}
           professorId={selectedProfessor.id}
           professorName={selectedProfessor.name}
+        />
+      )}
+
+      {showReviewModal && selectedProfessor && auth.currentUser && (
+        <ReviewModal
+          isOpen={showReviewModal}
+          onClose={() => {
+            setShowReviewModal(false);
+            setSelectedProfessor(null);
+          }}
+          darkMode={darkMode}
+          professorId={selectedProfessor.id}
+          professorName={selectedProfessor.name}
+          userId={auth.currentUser.uid}
         />
       )}
     </>
