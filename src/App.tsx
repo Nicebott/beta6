@@ -106,9 +106,15 @@ function App() {
         ));
 
       const matchesCampus = !selectedCampus || section.campus === selectedCampus;
+      
+      const modalidad = section.modalidad.toLowerCase();
       const matchesModality = !selectedModality || 
-        (selectedModality === 'virtual' && section.modalidad.toLowerCase().includes('online')) ||
-        (selectedModality === 'semipresencial' && section.modalidad.toLowerCase().includes('semipresencial'));
+        (selectedModality === 'virtual' && modalidad.includes('online')) ||
+        (selectedModality === 'semipresencial' && (
+          modalidad.includes('semi') || 
+          modalidad.includes('semipresencial') || 
+          modalidad.includes('semi presencial')
+        ));
 
       return matchesSearch && matchesCampus && matchesModality;
     });
